@@ -125,13 +125,28 @@ def get_grades(student_id):
     rows = [row for row in GRADES if row["student_id"] == sid]
     return flask.jsonify(rows)
 
+def current_user():
+    username = flask.session.get("user")
+    return USERS.get(username) if username else None
+
+
 @app.post("/grades/update")
 def update_grade():
+    user = current_user()
+    if user is None:
+        return {"error": "authentication required"}, 401
+
     data = flask.request.get_json()
 
     student_id = data["student_id"]
     course_id = data["course_id"]
     grade = data["grade"]
+
+    if user.role == "student":
+        return {"error": "forbidden"}, 403
+    if user.role == "professor" and course_id not in (user.courses or []):
+        return {"error": "forbidden"}, 403
+    # admin: no additional restriction
 
     row = find_grade(student_id, course_id)
     if row is None:
@@ -143,8 +158,21 @@ def update_grade():
 
 @app.get("/files")
 def download_file():
+    if current_user() is None:
+        return {"error": "authentication required"}, 401
+
     raw_path = flask.request.args.get("path", "")
-    target = MATERIALS_DIR / raw_path
+    base = MATERIALS_DIR.resolve()
+    target = (base / raw_path).resolve()
+
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return {"error": "file not found"}, 404
+
+    if not target.is_file():
+        return {"error": "file not found"}, 404
+
     return flask.send_file(target)
 
 @app.errorhandler(Exception)

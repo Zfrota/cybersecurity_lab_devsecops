@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 .DS_Store
 reports/
+2_llms.pdf
+local-notes/
